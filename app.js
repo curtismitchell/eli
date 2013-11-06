@@ -27,7 +27,11 @@ page.retrieveData();
 */
 
 var InstanceInfoPageParser = function(doc) {
-	var collections = [];
+	var instance_info = {
+		fields: [],
+		data: []
+	};
+
 	var cheerio = require('cheerio');
 	var doc = cheerio.load(doc);
 	var _ = require('underscore');
@@ -76,21 +80,33 @@ var InstanceInfoPageParser = function(doc) {
 			collection.data.push(obj);
 		});
 
-		collections.push(collection);
+		var temp = _.union(instance_info.fields, collection.fields);
+		instance_info.fields = temp;
+
+		var indexedData = _.indexBy(instance_info.data, 'instance_type');
+
+		collection.data.forEach(function(d){
+			var existing = _.findWhere(instance_info.data, {instance_type: d.instance_type });
+
+			if(existing) {
+				existing = _.extend(d, existing);
+			}
+				
+			indexedData[d.instance_type] = d;
+		});
+
+		instance_info.data = indexedData;
 	};
 
 	doc('table').each(onTableFound);
 
-	return {
-		fields: _.union(collections[0].fields, collections[1].fields),
-		tables: _.zip(collections[0].data, collections[1].data)
-	};
+	return instance_info;
 };
 
 
 var fs = require('fs');
 var parser = new InstanceInfoPageParser(fs.readFileSync('./sample_page.html'));
 //parser.init();
-console.log(JSON.stringify(parser.fields));
+console.log(parser.data['m1.medium']);
 
 
