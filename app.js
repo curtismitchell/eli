@@ -1,135 +1,96 @@
-var request = require('request');
-var url = 'http://aws.amazon.com/ec2/instance-types/';
 
-var EC2InstanceInfoParser = function(doc) {
-		this.headings = [];
-		this._cheerio = require('cheerio');
-		this.doc = this._cheerio.load(doc);
-		this._enumerateHeadings();
+var InstanceInfoPage = function() {
+	var request = require('request');
+	var url = 'http://aws.amazon.com/ec2/instance-types/';
+
+	this.onDataRetrieved = function(err, resp, html){};
+
+	this.retrieveData = function() {
+		var request = require('request');
+		if(this.onDataRetrieved) {
+			request(url, this.onDataRetrieved);
+		} else {
+			request(url);
+		}
+	};
 };
 
-EC2InstanceInfoParser.prototype._enumerateHeadings = function() {
-	var that = this;
-	this.doc('h2').map(function(iter, heading) {
-		var h = that._cheerio(heading);
-		if(h.text().indexOf('Instance Type') < 0) return;
-		if(!that.headings) that.headings = [];
-		var propName = jsSafe(h.text());
-		that.headings.push(propName);
-
-		that.headings[propName] = that._getDetails(h);
-
-		console.log(propName);
-		console.log(that.headings[propName]);
-
-	});
-}
-
-EC2InstanceInfoParser.prototype._getDetails = function(h) {
-	var tbl = h.siblings('table').first();
-	var headerRow = this._cheerio(tbl).children('tr').first();
-
-	var obj = this._getFields(headerRow, true);
-
-	var results = [];	
-
-	var that = this;
-	this._cheerio(headerRow).siblings('tr').each(function(iter, row) {
-		var vals = that._getFields(row);
-		var newObj = {};
-		for(var i=0; i < vals.length; i++) {
-			newObj[obj[i]] = vals[i];
-		}
-		results.push(newObj);
-	});
-	return results;
-}
-
-EC2InstanceInfoParser.prototype._getFields = function(headerRow, makeSafe) {
-	var r = this._cheerio(headerRow);
-	var that = this;
-	var vals = [];
-	r.children('td').map(function(i, cell) {
-		if(makeSafe) {
-			vals.push(jsSafe(that._cheerio(cell).text()));
-		} else {
-			vals.push(readable(that._cheerio(cell).text()));
-		}
-	});
-	console.log(vals.length);
-	return vals;
-}
-
-var jsSafe = function(str) {
-	return str.trim().toLowerCase().replace(/\s/g, '_').replace(/\W/g, '');
-}
-
-var readable = function(str) {
-	return str.trim().replace(/\s{2}?/g, '');
-}
-
-
-request(url, function(err, resp, html) {
-	var er = new EC2InstanceInfoParser(html);
-});
-
 /*
-request(url, function(err, resp, html) {
-	var headings = {};
-	if(err) return console.error(err);
+var page = new InstanceInfoPage();
 
-	var doc = cheerio.load(html);
-	doc('h2').map(function(ndx, header) {
-		var h = cheerio(header);
-		if(h.text().indexOf('Instance Type') < 0) return;
-		
-		addHeading(h.text(), function() {
-			var results = [];
-			var tbl = h.siblings('table').first();
+page.onDataRetrieved = function(err, resp, html) {
+	var parser = new InstanceInfoPageParser(html);
+	parser.init();
+};
 
-			var obj = [];
-			//var results = [];	
-			
-			cheerio(tbl).siblings('thead tr').each(function(i, heading) {
-				obj = getFields(heading, true);
-			});	
-
-			obj.push(h.text());
-			cheerio(tbl).children('tr').each(function(iter, row) {
-				var vals = getFields(row);
-				var newObj = {};
-				for(var i=0; i < vals.length; i++) {
-					newObj[obj[i]] = vals[i];
-				}
-				results.push(newObj);
-			});
-			return results;
-		});
-		
-	});
-
-	function addHeading(heading, func) {
-		headings[jsSafe(heading)] = func();
-	}
-
-	function getFields(headerRow, makeSafe) {
-		var r = cheerio(headerRow);
-		var vals = [];
-		r.children('td').map(function(i, cell) {
-			if(makeSafe) {
-				vals.push(jsSafe(cheerio(cell).text()));
-			} else {
-				vals.push(readable(cheerio(cell).text()));
-			}
-		});
-		
-		return vals;
-	}
-
-	console.log(headings);
-});
+page.retrieveData();
 */
 
+var InstanceInfoPageParser = function(doc) {
+	var collections = [];
+	var cheerio = require('cheerio');
+	var doc = cheerio.load(doc);
+	var _ = require('underscore');
 
+	var Utils = {
+		getPropertySafeString: function(str) {
+			return str.trim().toLowerCase().replace(/\s/g, '_').replace(/\W/g, '');
+		},
+		getReadableString: function(str) {
+			return str.trim().replace(/\s{2}?/g, '');
+		}
+	};
+
+	this.init = function() {
+		doc('table').each(onTableFound);
+	};
+	
+	function onTableFound(index, table) {
+		var tbl = cheerio(table);
+		var collection = {
+			fields: [],
+			data: [],
+			name: function() { return Utils.getPropertySafeString(this.desc); },
+			desc: null
+		};
+
+		collection.desc = tbl.prev().prev().text();
+
+		var headerRow = tbl.siblings('tr').first();
+
+		//get fields
+		headerRow.children('td').each(function(iter, field) {
+			var f = cheerio(field);
+			collection.fields.push({field: Utils.getPropertySafeString(f.text()), desc: Utils.getReadableString(f.text())});
+		});
+
+		//get data
+		var dataRows = headerRow.parent().siblings('tr'); //headerRow is in a <thead>
+		
+		dataRows.each(function(ndx, row){
+			var obj = {};
+			cheerio(row).children('td').each(function(iter, data) {
+				obj[collection.fields[iter].field] = Utils.getReadableString(cheerio(data).text());
+			});
+
+			collection.data.push(obj);
+		});
+
+		collections.push(collection);
+	};
+
+	doc('table').each(onTableFound);
+
+	return {
+		fields: _.union(collections[0].fields, collections[1].fields),
+		tables: _.zip(collections[0].data, collections[1].data)
+	};
+};
+
+
+var fs = require('fs');
+var parser = new InstanceInfoPageParser(fs.readFileSync('./sample_page.html'));
+//parser.init();
+console.log(JSON.stringify(parser.fields));
 
 
