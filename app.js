@@ -2,6 +2,8 @@ var ii = require('./instance_info');
 var p = require("./pricing");
 var _ = require('underscore');
 var express = require('express');
+var dictionary = require('./aws_dictionary');
+
 var app = express();
 var info, prices, isReady = false;
 
@@ -16,8 +18,10 @@ p(function(priceInfo) {
 });
 
 function onReady() {
-    if((!info) || (!prices)) return;
+    if((!info) || (!prices) || (dictionary === {})) return;
     isReady = true;
+
+    init();
 }
 
 app.use(express.json());
@@ -60,5 +64,9 @@ function confirmDataReady(req, res, next) {
     next();
 }
 
-app.listen(process.env.PORT);
+function init() {
+	var port = process.env.PORT || 3000;
+	app.listen(port);
+	console.log('listening on port ' + port);	
+}
 
