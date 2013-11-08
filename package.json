@@ -1,0 +1,25 @@
+{
+  "author": {
+    "name": "Curtis Mitchell",
+    "email": "curtismitchell@gmail.com",
+    "url": "curtismitchell.com"
+  },
+  "name": "elastic-info",
+  "description": "a tool for getting (unofficial) information about AWS resources",
+  "keywords": [
+    "ec2",
+    "aws",
+    "pricing",
+    "scraper"
+  ],
+  "version": "0.1.3",
+  "main": "./app.js",
+  "engines": {
+    "node": ">= 0.6"
+  },
+  "dependencies": {
+    "cheerio": "0.12.3",
+    "request": "2.27.0",
+    "underscore": "1.5.2"
+  }
+}
