@@ -46,13 +46,17 @@ app.get("/instances/:id", confirmDataReady, function(req, res){
 });
 
 app.get("/regions/:region", confirmDataReady, function(req, res){
-    var regionPrices = _.where(prices, {region: req.params.region});
+    var regionPrices = _.where(prices, {region: { id: req.params.region} });
     var types = _.pluck(regionPrices, "instance_type");
     var instances = _.filter(info, function(d) {
        _.contains(types, d.instance_type); 
     });
     
     res.json(regionPrices);
+});
+
+app.get("/regions", confirmDataReady, function(req, res) {
+	res.json(_.uniq(_.pluck(prices, "region")));
 });
 
 //middleware

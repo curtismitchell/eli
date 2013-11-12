@@ -1,15 +1,26 @@
 var cheerio = require('cheerio'),
 request = require('request'),
 DICT_DIV_SELECTOR = '#ec2Dictionary',
-dictionary = {};
+dictionary = {},
+events = require('events'),
+emitter = new events.EventEmitter();
 
-request('http://aws.amazon.com/windows', function(err, resp, html){
-	var $ = cheerio.load(html);
+var AWSDictionary = function() {
+	events.EventEmitter.call(this);
+	var self = this;
 
-    $(DICT_DIV_SELECTOR).children().each(function() {
-        var item = $(this);
-        dictionary[item.val()] = item.text().trim();
-    });
-});
+	request('http://aws.amazon.com/windows', function(err, resp, html){
+		var $ = cheerio.load(html);
 
-exports.dictionary = dictionary;
+	    $(DICT_DIV_SELECTOR).children().each(function() {
+	        var item = $(this);
+	        dictionary[item.val()] = item.text().trim();
+	    });
+
+	    self.emit('ready', dictionary);
+	});
+};
+
+AWSDictionary.prototype.__proto__ = events.EventEmitter.prototype;
+
+module.exports = AWSDictionary;

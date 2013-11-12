@@ -1,6 +1,9 @@
 var request = require('request');
 var rootUrl = "http://aws.amazon.com/ec2/pricing/json";
 var _ = require('underscore');
+var dictionary;
+
+var AWSDictionary = require('./aws_dictionary');
 
 var ec2ImageTypes = [
   {id: "linux", description: "Linux"},
@@ -27,8 +30,11 @@ var inprogress = 0;
 var whenDone;
 
 module.exports = function(callback) {
-    whenDone = callback;
+  whenDone = callback;
+  new AWSDictionary().on('ready', function(d) {
+    dictionary = d;
     updatePricing();
+  });
 };
 
 function updatePricing() {
@@ -57,7 +63,7 @@ function appendData(prices, additionalInfo) {
 
     for(var i=0;i<prices.config.regions.length;i++) {
         var region = prices.config.regions[i];
-        appendReservedPricingForRegion(region, additionalInfo);
+        appendPriceForRegion(region, additionalInfo, prices.config.valueColumns);
     }
     inprogress--;
     
@@ -66,34 +72,50 @@ function appendData(prices, additionalInfo) {
     }
 }
 
-function appendReservedPricingForRegion(region, reservation) {
+function appendPriceForRegion(region, reservation, rateList) {
   for(var i=0; i<region.instanceTypes.length; i++) {
     var instanceType = region.instanceTypes[i];
     for(var k=0; k<instanceType.sizes.length; k++) {
         var size = instanceType.sizes[k];
 
-        var rates = _.map(size.valueColumns, function(vc){
+        var rates = {};
+
+        _.each(size.valueColumns, function(vc, key, list){
             var isHourly = (vc.name.match(/hourly/i) !== null) || reservation.isOnDemand; 
             var term = _.first(vc.name.match(/\d/));
             if(!term) {
                 term = 'ondemand';
             }
-            
-            return {
-                term: term,
-                hourlyRate: (isHourly)? parseFloat(vc.prices.USD) : 0,
-                upFrontCost: (isHourly)? 0 : parseFloat(vc.prices.USD)
-            }; 
+
+            if(rates[term]) {
+              _.extend(rates[term], (isHourly)? {
+                  term: term,
+                  hourlyRate: (isHourly)? parseFloat(vc.prices.USD) : 0
+              } : {
+                  term: term,
+                  upFrontCost: (isHourly)? 0 : parseFloat(vc.prices.USD)
+              }); 
+            } else {
+              rates[term] = (isHourly)? {
+                  term: term,
+                  description: dictionary[vc.name],
+                  hourlyRate: (isHourly)? parseFloat(vc.prices.USD) : 0,
+              } : {
+                  term: term,
+                  description: dictionary[vc.name],
+                  upFrontCost: (isHourly)? 0 : parseFloat(vc.prices.USD)
+              };
+            }
         });
-    
+
         var price = {
-            region: region.region,
+            region: { id: region.region, description: dictionary[region.region] },
             reservation_type: reservation.reservation.description,
             os: reservation.image.description,
-            instance_type: size.size,
+            instance_type: { id: size.size, description: dictionary[instanceType.type] },
             rates: rates
         };
-    
+
         all_prices.push(price);
     }
   }
